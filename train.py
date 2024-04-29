@@ -7,6 +7,7 @@ import logging
 from tqdm import tqdm
 import time
 import wandb
+from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -16,6 +17,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--data_path", type=str, default="./data/raw/train")
     parser.add_argument("--val_path", type=str, default="./data/raw/val")
+    parser.add_argument("--loss_fn", type=str, default="mse")
     parser.add_argument("--num_frames", type=int, default=10)
     parser.add_argument("--patch", action="store_true")
     parser.add_argument("--lr", type=float, default=0.0001)
@@ -52,7 +54,14 @@ if __name__ == "__main__":
 
     logging.info(f"dataset size: {len(dataset)}")
     optimizer = torch.optim.AdamW(model.parameters(), lr = args.lr)
+    loss_fn = torch.nn.functional.mse_loss
+    if args.loss_fn == "ssim":
+        ssim_loss = SSIM( data_range=1.0, size_average=True)
 
+        loss_fn = lambda ypred, y: 1 - ssim_loss(ypred, y)
+    elif args.loss_fn == "ms_ssim":
+        ssim_loss = MS_SSIM( data_range=1.0, size_average=True)
+        loss_fn = lambda ypred, y: 1 - ssim_loss(ypred, y)
     j = 0
     for i in range(args.epochs):
         logging.info(f"epoch: {i}")
@@ -68,7 +77,7 @@ if __name__ == "__main__":
             y = y.reshape(y.shape[0], -1, y.shape[-2], y.shape[-1])
             optimizer.zero_grad()
             ypred = model(x)
-            loss = torch.nn.functional.mse_loss(ypred, y)
+            loss = loss_fn(ypred, y)
             loss.backward()
             optimizer.step()
     
@@ -92,7 +101,7 @@ if __name__ == "__main__":
                         x = x.reshape(x.shape[0], -1, x.shape[-2], x.shape[-1])
                         y = y.reshape(y.shape[0], -1, y.shape[-2], y.shape[-1])
                         ypred = model(x)
-                        total_loss += torch.nn.functional.mse_loss(ypred, y).item()
+                        total_loss += loss_fn(ypred, y).item()
                         i += 1
                         if i == num_val_samples:
                             break
