@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "cv project"
+version = "0.1.0"
+description = ""
+authors = ["hdeep03 <hdeep03@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+yt-dlp = "^2024.4.9"
+opencv-python = "^4.9.0.80"
+ffmpeg-python = "^0.2.0"
+
+
+[tool.poetry.group.dev.dependencies]
+torch = "^2.3.0"
+tqdm = "^4.66.2"
+matplotlib = "^3.8.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
