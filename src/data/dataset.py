@@ -22,7 +22,7 @@ class VSRDataset(IterableDataset):
         ex = lambda im, px, py: im[:, :, 80*(py):80*(py+1), 80*(px):80*(px+1)]
         for i in range(16):
             for j in range(9):
-                yield ex(x, j, i), ex(y, j, i)
+                yield ex(x, i, j), ex(y, i, j)
 
     def __iter__(self):
         for video in self.videos:
@@ -31,6 +31,8 @@ class VSRDataset(IterableDataset):
             success = True
             while success:
                 success, image = vidcap.read()
+                if image.shape[0] != 720 or image.shape[1] != 1280:
+                    raise Exception("asdf")
                 out_x, out_y = self.process_image(image)
                 buffer = torch.cat((buffer, out_x), dim=0)
                 if buffer.shape[0] < self.buffer_size:
@@ -45,7 +47,7 @@ class VSRDataset(IterableDataset):
 
 if __name__ == "__main__":
     dataset = VSRDataset("./data/raw/val", patch=True)
-    dataloader = torch.utils.data.DataLoader(dataset)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1024)
     for x, y in tqdm(dataloader):
         pass
         # first_frame = x[0].permute(1, 2, 0).numpy()
