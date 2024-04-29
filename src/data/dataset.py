@@ -9,6 +9,7 @@ from utils import downsample, bicubic_upsample
 
 class VSRDataset(IterableDataset):
     def __init__(self, data_dir, buffer_size=10):
+        self.data_dir = data_dir
         self.videos = [f for f in os.listdir(data_dir) if f.endswith(".webm")]
         self.buffer_size = buffer_size
 
