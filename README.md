@@ -13,4 +13,4 @@ Model modified from [here](https://github.com/milesial/Pytorch-UNet/tree/master)
 
 ## Training
 Prepare data in `data/raw/train`, `data/raw/val`
-`python train.py --patch --run_dir run1`
+`python train.py --patch --run_dir runs/1`
