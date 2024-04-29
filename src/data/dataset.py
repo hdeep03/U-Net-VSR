@@ -28,14 +28,16 @@ class VSRDataset(IterableDataset):
         for video in self.videos:
             buffer = torch.empty((0, 3, 720, 1280))
             vidcap = cv2.VideoCapture(os.path.join(self.data_dir, video))
+            if not vidcap.isOpened():
+                continue
             success = True
             while success:
                 success, image = vidcap.read()
-                if image.shape[0] != 720 or image.shape[1] != 1280:
-                    raise Exception("asdf")
+                if not success:
+                    break
                 out_x, out_y = self.process_image(image)
                 buffer = torch.cat((buffer, out_x), dim=0)
-                if buffer.shape[0] < self.buffer_size:
+                if buffer.shape[0] != self.buffer_size:
                     continue
 
                 if not self.patch:
@@ -43,15 +45,11 @@ class VSRDataset(IterableDataset):
                 else:
                     yield from self.extract_patches(buffer, out_y)
                 buffer = buffer[1:]
+            vidcap.release()
 
 
 if __name__ == "__main__":
     dataset = VSRDataset("./data/raw/val", patch=True)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1024)
-    for x, y in tqdm(dataloader):
+    for X, Y in tqdm(dataloader):
         pass
-        # first_frame = x[0].permute(1, 2, 0).numpy()
-        # cv2.imshow("First frame", first_frame)
-        # cv2.imshow("Ground truth", y[0].permute(1, 2, 0).numpy())
-        # cv2.waitKey(0)
-        # exit()
