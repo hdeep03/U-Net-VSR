@@ -4,18 +4,21 @@ from torch.utils.data import IterableDataset
 import cv2
 import torch
 from tqdm import tqdm
-from src.data.utils import downsample, bicubic_upsample
+from utils import downsample, bicubic_upsample
 
 class VSRDataset(IterableDataset):
-    def __init__(self, data_dir, buffer_size=10, patch=False):
+    def __init__(self, data_dir, buffer_size=10, patch=False, downsample_factor=2):
         self.data_dir = data_dir
         self.videos = [f for f in os.listdir(data_dir) if f.endswith(".webm")]
         self.buffer_size = buffer_size
         self.patch = patch
+        self.downsample_factor = downsample_factor
 
     def process_image(self, image) -> Tuple[torch.Tensor, torch.Tensor]:
         y = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)/255.0
-        x = bicubic_upsample(downsample(y))
+        original_size = (y.shape[2], y.shape[3])
+        size = (y.shape[2]//self.downsample_factor, y.shape[3]//self.downsample_factor)
+        x = bicubic_upsample(downsample(y, size), original_size)
         return x, y
 
     def extract_patches(self, x, y):
