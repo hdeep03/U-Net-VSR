@@ -49,6 +49,13 @@ class VSRDataset(IterableDataset):
                     yield from self.extract_patches(buffer, out_y)
                 buffer = buffer[1:]
             vidcap.release()
+    def __len__(self):
+        ans=0
+        for video in self.videos:
+            vidcap = cv2.VideoCapture(os.path.join(self.data_dir, video))
+            ans+=int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+            vidcap.release()
+        return ans
 
 
 if __name__ == "__main__":

@@ -9,7 +9,10 @@ from src.metrics.ssim import ssim
 import cv2
 
 
-def reconstruct_image(patches: torch.Tensor) -> torch.Tensor:
+def reconstruct_image(patches: torch.Tensor, args) -> torch.Tensor:
+    if not args.patch:
+        return patches.squeeze(0).cpu()
+
     positions = []
     for i in range(16):
         for j in range(9):
@@ -26,6 +29,7 @@ def reconstruct_image(patches: torch.Tensor) -> torch.Tensor:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run_dir", type=str, default="./run")
+    parser.add_argument('--ckpt', type=str, default='')
     parser.add_argument("--num_frames", type=int, default=10)
     parser.add_argument("--test_path", type=str, default="./data/raw/test")
     parser.add_argument("--patch", action="store_true")
@@ -48,12 +52,13 @@ if __name__ == "__main__":
     model = model.to(device)
 
     ckpts = sorted([int(f.split("_")[1].split(".")[0]) for f in os.listdir(args.run_dir) if f.endswith(".pth")])
-    if ckpts:
-        model.load_state_dict(torch.load(f"{args.run_dir}/model_{ckpts[-1]}.pth", map_location=device))
-        logging.info(f"model loaded from {args.run_dir}/model_{ckpts[-1]}.pth")
+    ckpt = f"{args.run_dir}/model_{ckpts[-1]}.pth" if ckpts and not args.ckpt else args.ckpt
+    model.load_state_dict(torch.load(ckpt, map_location=device))
+    logging.info(f"model loaded from {ckpt}")
+
     model.eval()    
     with torch.inference_mode():
-        dataloader = torch.utils.data.DataLoader(testset, batch_size=144)
+        dataloader = torch.utils.data.DataLoader(testset, batch_size=144 if args.patch else 1) 
         i = 0
         for X, y in dataloader:
             i+=1
@@ -65,17 +70,17 @@ if __name__ == "__main__":
             y = y.squeeze(1)
             y_pred = model(X)
             print(torch.max(y_pred))
-
-            y_img = reconstruct_image(y_pred)
-            y_show = (y_img.numpy().transpose(1, 2, 0) * 255).astype('uint8')
-            y_gt = reconstruct_image(y)
-            y_gt_show = (y_gt.numpy().transpose(1, 2, 0) * 255).astype('uint8')
-            cv2.imshow('image', y_show)
-            cv2.imwrite('reconstruct.jpg', y_show)
-            cv2.waitKey(0)
-            cv2.imshow('image', y_gt_show)
-            cv2.imwrite('original.jpg', y_gt_show)
-            cv2.waitKey(0)
+            
+            y_img = reconstruct_image(y_pred, args)
+            y_show = (y_img.numpy().transpose(1, 2, 0).clip(0, 1) * 255).astype('uint8')
+            y_gt = reconstruct_image(y, args)
+            y_gt_show = (y_gt.numpy().transpose(1, 2, 0).clip(0,1) * 255).astype('uint8')
+            # cv2.imshow('image', y_show)
+            cv2.imwrite(os.path.join(args.run_dir, f'reconstruct_{ckpt.split("/")[-1]}.jpg'), y_show)
+            # cv2.waitKey(0)
+            # cv2.imshow('image', y_gt_show)
+            cv2.imwrite(os.path.join(args.run_dir, f'original_{ckpt.split("/")[-1]}.jpg'), y_gt_show)
+            # cv2.waitKey(0)
             exit()
 
     
