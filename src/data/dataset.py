@@ -7,26 +7,29 @@ from tqdm import tqdm
 from src.data.utils import downsample, bicubic_upsample
 
 class VSRDataset(IterableDataset):
-    def __init__(self, data_dir, buffer_size=10, patch=False):
+    def __init__(self, data_dir, buffer_size=10, patch=False, downsample=2, upsample=1):
         self.data_dir = data_dir
         self.videos = [f for f in os.listdir(data_dir) if f.endswith(".webm")]
         self.buffer_size = buffer_size
         self.patch = patch
+        self.downsample = downsample
+        self.upsample = upsample
 
     def process_image(self, image) -> Tuple[torch.Tensor, torch.Tensor]:
         y = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)/255.0
-        x = bicubic_upsample(downsample(y))
+        x = bicubic_upsample(downsample(y, self.downsample), self.upsample)
         return x, y
 
     def extract_patches(self, x, y):
-        ex = lambda im, px, py: im[:, :, 80*(py):80*(py+1), 80*(px):80*(px+1)]
+        mult = 80 * self.upsample
+        ex = lambda im, px, py: im[:, :, mult*(py):mult*(py+1), mult*(px):mult*(px+1)]
         for i in range(16):
             for j in range(9):
                 yield ex(x, i, j), ex(y, i, j)
 
     def __iter__(self):
         for video in self.videos:
-            buffer = torch.empty((0, 3, 720, 1280))
+            buffer = torch.empty((0, 3, 720*self.upsample, 1280*self.upsample))
             vidcap = cv2.VideoCapture(os.path.join(self.data_dir, video))
             if not vidcap.isOpened():
                 continue
