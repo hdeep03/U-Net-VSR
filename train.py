@@ -8,6 +8,8 @@ from tqdm import tqdm
 import time
 import wandb
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+from eval import reconstruct_image
+import cv2
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -23,6 +25,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--log_every", type=int, default=100)
     parser.add_argument("--save_every", type=int, default=1000)
+    parser.add_argument("--down_sample", type=int, default=2)
+    parser.add_argument("--up_sample", type=int, default=1)
 
     args = parser.parse_args()
     os.makedirs(args.run_dir, exist_ok=True)
@@ -39,8 +43,8 @@ if __name__ == "__main__":
         valset = VSRDataset(args.val_path, buffer_size=1, patch=args.patch)
     else:
         model = UNet(3 * args.num_frames)
-        dataset = VSRDataset(args.data_path, buffer_size=args.num_frames, patch=args.patch)
-        valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch)
+        dataset = VSRDataset(args.data_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
+        valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch, downsample=args.down_sample, upsample=args.up_sample)
     
     model = model.to(device)
 
@@ -57,7 +61,6 @@ if __name__ == "__main__":
     loss_fn = torch.nn.functional.mse_loss
     if args.loss_fn == "ssim":
         ssim_loss = SSIM( data_range=1.0, size_average=True)
-
         loss_fn = lambda ypred, y: 1 - ssim_loss(ypred, y)
     elif args.loss_fn == "ms_ssim":
         ssim_loss = MS_SSIM( data_range=1.0, size_average=True)
@@ -83,9 +86,12 @@ if __name__ == "__main__":
     
             j += 1
             if j % args.log_every == 0:
-                logging.info(f"loss: {loss}, sample/s = {args.log_every * x.shape[0] / (time.time() - time1)}")
-                wandb.log({"train_loss": loss, "samples_per_second": args.log_every * x.shape[0] / (time.time() - time1)})
+                
                 time1 = time.time()
+                with torch.inference_mode():
+                    naive_loss = loss_fn(x[:,-3:], y)
+                logging.info(f"orig loss: {naive_loss}, loss: {loss.item()}, sample/s = {args.log_every * x.shape[0] / (time.time() - time1)}")
+                wandb.log({"orig_loss": naive_loss,"train_loss": loss.item(), "samples_per_second": args.log_every * x.shape[0] / (time.time() - time1)},step=j)
             if j % args.save_every == 0:
                 torch.save(model.state_dict(), os.path.join(args.run_dir, f"model_{j}.pth"))
                 logging.info(f"model saved at {args.run_dir}/model_{j}.pth")
@@ -106,7 +112,7 @@ if __name__ == "__main__":
                         if i == num_val_samples:
                             break
                     logging.info(f"avg val_loss: {total_loss / num_val_samples}")
-                    wandb.log({"val_loss": total_loss / num_val_samples})
+                    wandb.log({"val_loss": total_loss / num_val_samples},step=j)         
     
 
     wandb.finish()
