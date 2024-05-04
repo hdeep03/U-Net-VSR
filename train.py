@@ -1,5 +1,5 @@
 import torch
-from src.model.unet_model import VUNet, UNet
+from src.model.unet_model import UNet, RUNet, SubPixelUNet
 from src.data.dataset import VSRDataset
 import argparse
 import os
@@ -27,6 +27,10 @@ if __name__ == "__main__":
     parser.add_argument("--save_every", type=int, default=1000)
     parser.add_argument("--down_sample", type=int, default=2)
     parser.add_argument("--up_sample", type=int, default=1)
+    parser.add_argument("--use_tanh", action="store_true")
+    parser.add_argument("--use_runet", action="store_true")
+    parser.add_argument("--use_subp", action="store_true")
+
 
     args = parser.parse_args()
     os.makedirs(args.run_dir, exist_ok=True)
@@ -38,11 +42,19 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if args.baseline:
-        model = UNet(3)
+        model = UNet(3, use_tanh=args.use_tanh)
         dataset = VSRDataset(args.data_path, buffer_size=1, patch=args.patch)
         valset = VSRDataset(args.val_path, buffer_size=1, patch=args.patch)
+    elif args.use_runet:
+        model = RUNet(3 * args.num_frames, use_tanh=args.use_tanh)
+        dataset = VSRDataset(args.data_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
+        valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch, downsample=args.down_sample, upsample=args.up_sample)
+    elif args.use_subp:
+        model = SubPixelUNet(3 * args.num_frames, use_tanh=args.use_tanh)
+        dataset = VSRDataset(args.data_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
+        valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch, downsample=args.down_sample, upsample=args.up_sample)
     else:
-        model = UNet(3 * args.num_frames)
+        model = UNet(3 * args.num_frames, use_tanh=args.use_tanh)
         dataset = VSRDataset(args.data_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
         valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch, downsample=args.down_sample, upsample=args.up_sample)
     
@@ -82,6 +94,8 @@ if __name__ == "__main__":
             ypred = model(x)
             loss = loss_fn(ypred, y)
             loss.backward()
+            max_norm = 1.0
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
             optimizer.step()
     
             j += 1

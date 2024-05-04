@@ -4,7 +4,7 @@ from torch.utils.data import IterableDataset
 import cv2
 import torch
 from tqdm import tqdm
-from utils import downsample, bicubic_upsample
+from src.data.utils import downsample, bicubic_upsample
 
 class VSRDataset(IterableDataset):
     def __init__(self, data_dir, buffer_size=10, patch=False, downsample=2, upsample=1):
