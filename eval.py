@@ -1,5 +1,5 @@
 import torch
-from src.model.unet_model import UNet, SubPixelUNet, RUNet
+from src.model.unet_model import UNet, RUNet, RUNetSmall
 from src.data.dataset import VSRDataset
 import argparse
 import os
@@ -9,6 +9,7 @@ from src.metrics.ssim import ssim
 import cv2
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 import time
+from torch.profiler import profile, record_function, ProfilerActivity
 
 
 def reconstruct_image(patches: torch.Tensor, args) -> torch.Tensor:
@@ -47,6 +48,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_tanh", action="store_true")
     parser.add_argument("--use_runet", action="store_true")
     parser.add_argument("--use_subp", action="store_true")
+    parser.add_argument("--use_runetsmall", action="store_true")
 
     args = parser.parse_args()
     os.makedirs(args.run_dir, exist_ok=True)
@@ -61,8 +63,8 @@ if __name__ == "__main__":
     elif args.use_runet:
         model = RUNet(3 * args.num_frames, use_tanh=args.use_tanh)
         testset = VSRDataset(args.test_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
-    elif args.use_subp:
-        model = SubPixelUNet(3 * args.num_frames, use_tanh=args.use_tanh)
+    elif args.use_runetsmall:
+        model = RUNetSmall(3 * args.num_frames, use_tanh=args.use_tanh)
         testset = VSRDataset(args.test_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
     else:
         model = UNet(3 * args.num_frames, use_tanh=args.use_tanh)
@@ -87,16 +89,22 @@ if __name__ == "__main__":
         
         for X, y in dataloader:
             i+=1
-            start_time = time.time()
+            
 
             if i % 1000 ==0:
                 X = X.to(device)
                 X = X.reshape(X.shape[0], -1, X.shape[-2], X.shape[-1])
                 y = y.to(device)
                 y = y.squeeze(1)
+                start_time = time.time()
+                # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, record_shapes=True) as prof:
+                    # with record_function("model_inference"):
                 y_pred = model(X)
-                print(torch.max(y_pred))
+                
                 logging.info(f"elapsed time: {time.time() - start_time}")
+                print(torch.max(y_pred))
+                logging.info(f"max gpu memory used: {torch.cuda.max_memory_allocated() / 1024 ** 2} MB")
+                # logging.info(f"max gpu memory used: {torch.cuda.max_memory_allocated() / 1024 ** 2} MB")
                 
                 y_img = reconstruct_image(y_pred, args)
                 y_show = (y_img.numpy().transpose(1, 2, 0).clip(0, 1) * 255).astype('uint8')
@@ -107,9 +115,14 @@ if __name__ == "__main__":
                 logging.info(f"model mse: {mse_loss_fn(y_pred, y).item()}, ssim: {ssim_loss_fn(y_pred, y).item()}, psnr: {pnsr(y_show, y_gt_show).item()}") 
                 logging.info(f"naive mse: {mse_loss_fn(X[:,-3:], y).item()}, ssim: {ssim_loss_fn(X[:,-3:], y).item()}, psnr: {pnsr(y_upsample_show, y_gt_show).item()}")
                 # cv2.imshow('image', y_show)
-                print(y_show - y_upsample_show)
+                # print(y_show - y_upsample_show)
                 side_by_side = np.concatenate((y_show, y_gt_show, y_upsample_show), axis=1)
                 cv2.imwrite(os.path.join(args.run_dir, f'comparison_{ckpt.split("/")[-1]}_{i}.jpg'), side_by_side)
+                cv2.imwrite(os.path.join(args.run_dir, f'orig_{ckpt.split("/")[-1]}_{i}.jpg'), y_gt_show)
+                cv2.imwrite(os.path.join(args.run_dir, f'upsample_{ckpt.split("/")[-1]}_{i}.jpg'), y_upsample_show)
+                cv2.imwrite(os.path.join(args.run_dir, f'model_{ckpt.split("/")[-1]}_{i}.jpg'), y_show)
+
+                
                 
             if i == 5000:
                 break

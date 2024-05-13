@@ -1,5 +1,5 @@
 import torch
-from src.model.unet_model import UNet, RUNet, SubPixelUNet
+from src.model.unet_model import UNet, RUNet, RUNetSmall
 from src.data.dataset import VSRDataset
 import argparse
 import os
@@ -8,6 +8,7 @@ from tqdm import tqdm
 import time
 import wandb
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+import pdb
 from eval import reconstruct_image
 import cv2
 
@@ -30,6 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_tanh", action="store_true")
     parser.add_argument("--use_runet", action="store_true")
     parser.add_argument("--use_subp", action="store_true")
+    parser.add_argument("--use_runetsmall", action="store_true")
 
 
     args = parser.parse_args()
@@ -49,8 +51,8 @@ if __name__ == "__main__":
         model = RUNet(3 * args.num_frames, use_tanh=args.use_tanh)
         dataset = VSRDataset(args.data_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
         valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch, downsample=args.down_sample, upsample=args.up_sample)
-    elif args.use_subp:
-        model = SubPixelUNet(3 * args.num_frames, use_tanh=args.use_tanh)
+    elif args.use_runetsmall:
+        model = RUNetSmall(3 * args.num_frames, use_tanh=args.use_tanh)
         dataset = VSRDataset(args.data_path, buffer_size=args.num_frames, patch=args.patch,downsample=args.down_sample, upsample=args.up_sample)
         valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch, downsample=args.down_sample, upsample=args.up_sample)
     else:
@@ -59,6 +61,8 @@ if __name__ == "__main__":
         valset = VSRDataset(args.val_path, buffer_size=args.num_frames, patch=args.patch, downsample=args.down_sample, upsample=args.up_sample)
     
     model = model.to(device)
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logging.info(f"model num params: {num_params}")
 
     ckpts = sorted([int(f.split("_")[1].split(".")[0]) for f in os.listdir(args.run_dir) if f.endswith(".pth")])
     if ckpts:
@@ -83,6 +87,9 @@ if __name__ == "__main__":
 
         time1 = time.time()
         for x, y in tqdm(dataloader):        
+            if ckpts and j < ckpts[-1]:
+                j += 1
+                continue
             model.train()
             # x : [batch_size, nframes, 3, 64, 64]
             # y: [batch_size, 3, 64, 64]
@@ -90,6 +97,7 @@ if __name__ == "__main__":
             y = y.to(device)
             x = x.reshape(x.shape[0], -1, x.shape[-2], x.shape[-1])
             y = y.reshape(y.shape[0], -1, y.shape[-2], y.shape[-1])
+            # pdb.set_trace()
             optimizer.zero_grad()
             ypred = model(x)
             loss = loss_fn(ypred, y)
