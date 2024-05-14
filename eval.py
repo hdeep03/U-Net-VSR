@@ -83,6 +83,8 @@ if __name__ == "__main__":
     ssim_loss_fn = lambda ypred, y: 1 - ssim_loss(ypred, y)
 
     model.eval() 
+    psnr_diff = 0.0
+    ssim_diff = 0.0
     with torch.inference_mode():
         dataloader = torch.utils.data.DataLoader(testset, batch_size=144 if args.patch else 1) 
         i = 0
@@ -112,8 +114,15 @@ if __name__ == "__main__":
                 y_gt_show = (y_gt.numpy().transpose(1, 2, 0).clip(0,1) * 255).astype('uint8')
                 y_upsample = reconstruct_image(X[:,-3:], args)
                 y_upsample_show = (y_upsample.numpy().transpose(1, 2, 0).clip(0,1) * 255).astype('uint8')
-                logging.info(f"model mse: {mse_loss_fn(y_pred, y).item()}, ssim: {ssim_loss_fn(y_pred, y).item()}, psnr: {pnsr(y_show, y_gt_show).item()}") 
-                logging.info(f"naive mse: {mse_loss_fn(X[:,-3:], y).item()}, ssim: {ssim_loss_fn(X[:,-3:], y).item()}, psnr: {pnsr(y_upsample_show, y_gt_show).item()}")
+                psnr_model = pnsr(y_show, y_gt_show).item()
+                psnr_upsample = pnsr(y_upsample_show, y_gt_show).item()
+                ssim_model = ssim_loss_fn(y_pred, y).item()
+                ssim_upsample = ssim_loss_fn(X[:,-3:], y).item()
+
+                psnr_diff += psnr_model - psnr_upsample
+                ssim_diff += ssim_upsample - ssim_model
+                logging.info(f"model mse: {mse_loss_fn(y_pred, y).item()}, ssim: {ssim_model}, psnr: {psnr_model}") 
+                logging.info(f"naive mse: {mse_loss_fn(X[:,-3:], y).item()}, ssim: {ssim_upsample}, psnr: {psnr_upsample}")
                 # cv2.imshow('image', y_show)
                 # print(y_show - y_upsample_show)
                 side_by_side = np.concatenate((y_show, y_gt_show, y_upsample_show), axis=1)
@@ -121,9 +130,10 @@ if __name__ == "__main__":
                 cv2.imwrite(os.path.join(args.run_dir, f'orig_{ckpt.split("/")[-1]}_{i}.jpg'), y_gt_show)
                 cv2.imwrite(os.path.join(args.run_dir, f'upsample_{ckpt.split("/")[-1]}_{i}.jpg'), y_upsample_show)
                 cv2.imwrite(os.path.join(args.run_dir, f'model_{ckpt.split("/")[-1]}_{i}.jpg'), y_show)
-
                 
                 
             if i == 5000:
                 break
+        logging.info(f"avg psnr diff: {psnr_diff / 5}, avg ssim diff: {ssim_diff / 5}")
+
     
