@@ -165,3 +165,6 @@ cython_debug/
 .DS_Store
 
 run
+runs_d4/
+runs2/
+actual
