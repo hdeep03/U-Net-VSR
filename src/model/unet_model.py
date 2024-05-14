@@ -80,7 +80,7 @@ class RUNet(nn.Module):
         self.up3 = (Up(256, 128 // factor, bilinear, use_tanh=use_tanh))
         self.up4 = (Up(128, 64, bilinear, use_tanh=use_tanh))
         self.outc = (OutConv(64, 3))
-        # self.init_weights()
+        self.init_weights()
     def init_weights(self):
         def weight_init(m):
             if isinstance(m, nn.Conv2d):
