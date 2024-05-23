@@ -11,6 +11,7 @@ yt-dlp = "^2024.4.9"
 opencv-python = "^4.9.0.80"
 ffmpeg-python = "^0.2.0"
 wandb = "^0.16.6"
+coremltools = "^7.2"
 
 
 [tool.poetry.group.dev.dependencies]
