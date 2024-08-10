@@ -14,3 +14,6 @@ Model modified from [here](https://github.com/milesial/Pytorch-UNet/tree/master)
 ## Training
 Prepare data in `data/raw/train`, `data/raw/val`
 `python train.py --patch --run_dir runs/1`
+
+## Report
+See our report [here](https://drive.google.com/file/d/1Uu3Se25D98e8lFfb-NNZxB-xkJPGdQOR/view?usp=sharing).
